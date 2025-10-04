@@ -1,0 +1,49 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module cv_voltage_source(plus, minus);
+  inout plus, minus;
+  electrical plus, minus;
+
+  // Cyclic voltammetry (triangle-wave) voltage source
+  parameter real Estart    =  -0.6;   // Starting potential (V)
+  parameter real Eend      =  -0.1;   // End potential      (V)
+  parameter real scan_rate =  5.0;   // Scan rate         (V/s)
+  parameter real delay     =  0.0;   // Start-up delay     (s)
+  parameter real trise     =  1e-6;  // Rise time constant (s)
+
+  real step;      // voltage swing
+  real t_half;    // time for one ramp
+  real period;    // full triangle period
+  real slope;     // signed scan rate
+  real t0;        // local time since delay
+  real tmod;      // time within current cycle
+  real Vtarg;     // instantaneous target voltage
+
+  analog begin
+    // compute triangle parameters
+    step   = Eend - Estart;
+    t_half = abs(step) / scan_rate;
+    period = 2.0 * t_half;
+    slope  = (step >= 0) ? scan_rate : -scan_rate;
+
+    // track time, accounting for delay
+    t0 = $abstime - delay;
+    if (t0 < 0) t0 = 0;
+
+    // find position within the repeating triangle
+    tmod = t0 - floor(t0/period)*period;
+
+    // forward or reverse segment?
+    if (tmod <= t_half) begin
+      // forward scan: Estart  Eend
+      Vtarg = Estart + slope * tmod;
+    end else begin
+      // reverse scan: Eend  Estart
+      Vtarg = Eend - slope * (tmod - t_half);
+    end
+
+    // drive the output with first-order filtering
+    V(plus, minus) <+ idt( (Vtarg - V(plus, minus)) / trise );
+  end
+endmodule
