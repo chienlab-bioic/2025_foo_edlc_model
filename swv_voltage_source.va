@@ -1,0 +1,56 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module vswv(plus, minus);
+  inout plus, minus;
+  electrical plus, minus;
+
+  // SWV parameters
+  parameter real Vstart = -0.6;    // starting base potential
+  parameter real Vstep  =  4e-3;   // step increment
+  parameter real Vpp    =  36e-3;  // amplitude of forward pulse
+  parameter real freq   =  500;    // SW frequency [Hz]
+  parameter real delay  =  0;    // wait before starting
+  parameter real trise  =50e-6;    // small time constant for ramping
+  parameter real PI     = 3.141592653589793;
+
+  real  halfT;       // halfperiod
+  real  t0, h, k;    // time counters
+  real  base;        // base potential
+  real  Vforward;    // forwardpulse level
+  real  Vtarg;       // target voltage this instant
+  integer ih;        // halfcycle index
+
+  analog begin
+    // halfperiod in seconds
+    halfT = 1.0/(2.0*freq);
+
+    // local time since we started
+    t0 = $abstime - delay;
+    if (t0 < 0) t0 = 0;
+
+    // which halfcycle are we in?
+    ih = floor(t0/halfT);
+
+    // basestep index increments every 2 halfcycles
+    k = floor( ih / 2 );
+
+    // build the array of base potentials starting from Vstart+Vstep:
+    //   step #1 => Vstart + Vstep, #2 => Vstart + 2*Vstep, ...
+    base = Vstart + (k+1)*Vstep;
+
+    // forwardpulse level is simply base + Vpp
+    Vforward = base + (2*Vpp);
+
+    // if we're in an even half (ih mod 2 == 0) use Vforward,
+    // otherwise use the base level
+    if ( (ih % 2) == 0 )
+      Vtarg = Vforward;
+    else
+      Vtarg = base;
+
+    // drive the electrode with a firstorder approach to Vtarg
+    // so we don't inject infinite bandwidth current
+    V(plus,minus) <+ idt( (Vtarg - V(plus,minus)) / trise );
+  end
+endmodule
