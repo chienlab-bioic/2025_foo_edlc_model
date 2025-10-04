@@ -1,0 +1,39 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module ca_voltage_source(plus, minus);
+  inout plus, minus;
+  electrical plus, minus;
+
+  // Chronoamperometry voltage source
+  parameter real Edc      = -0.3;     // Resting potential (V)
+  parameter real Epulse   = -0.5;     // Pulse potential   (V)
+  parameter real t_period =  0.1;     // Total period      (s)
+  parameter real t_pulse  =  0.05;    // Pulse duration    (s)
+  parameter real delay    =  0;       // Start-up delay    (s)
+  parameter real trise    =  1e-6;    // Rise time constant (s)
+
+  real t0;              // elapsed time since start
+  real k_cycle;         // integer cycle index
+  real tmod;            // time within current cycle
+  real Vtarg;           // target voltage at this instant
+
+  analog begin
+    // compute local time with delay
+    t0 = $abstime - delay;
+    if (t0 < 0) t0 = 0;
+
+    // determine cycle index and time within cycle
+    k_cycle = floor(t0 / t_period);
+    tmod    = t0 - k_cycle * t_period;
+
+    // set target voltage depending on pulse region
+    if (tmod <= t_pulse)
+      Vtarg = Epulse;
+    else
+      Vtarg = Edc;
+
+    // drive output via first-order filtering to avoid infinite bandwidth
+    V(plus, minus) <+ idt((Vtarg - V(plus, minus)) / trise);
+  end
+endmodule
